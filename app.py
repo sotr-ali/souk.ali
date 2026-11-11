@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify, Response
+https://from flask import Flask, render_template_string, jsonify, Response
 app = Flask(__name__)
 
 MANIFEST = {
