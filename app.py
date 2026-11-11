@@ -1,20 +1,13 @@
-import os
-from flask import Flask, render_template_string, jsonify, Response, request, session
-
+from flask import Flask, render_template_string, jsonify, Response
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "souk-ali-secret-123")
-ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "1234") # بدل 1234 للمودباس ديالك
-ADMIN_PATH = "ali-2026-khdam" # هادا هو الرابط السري ديال الأدمن
-
-# المنتجات هنا فالسيرفر - كيبانو عند كلشي
-PRODUCTS = [
-  {"id": 1, "name": "سماعة بلوتوث Pro Max", "price": 199, "old": 349, "img": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600"},
-  {"id": 2, "name": "ساعة ذكية Ultra", "price": 299, "old": 499, "img": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"},
-]
 
 MANIFEST = {
-  "name": "SOUK ALI", "short_name": "SOUK ALI", "start_url": "/",
-  "display": "standalone", "background_color": "#111111", "theme_color": "#111111",
+  "name": "SOUK ALI",
+  "short_name": "SOUK ALI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
   "icons": [
     {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "192x192","type": "image/png"},
     {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "512x512","type": "image/png"}
@@ -51,15 +44,17 @@ input{width:90%;padding:13px;margin:8px;border:1px solid #ddd;border-radius:12px
 if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js'); }
 let deferredPrompt;
 window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
-let products = [];
-let selectedImg='';
-let searchText = '';
-let ADMIN_PATH = 'ali-2026-khdam';
-async function load(){
-  let r = await fetch('/api/products');
-  products = await r.json();
-  render();
+let products = JSON.parse(localStorage.getItem('souk_products') || '[]');
+if(products.length==0){
+ products=[
+  {name:'سماعة بلوتوث Pro Max',price:199,old:349,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'},
+  {name:'ساعة ذكية Ultra',price:299,old:499,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'}
+ ];
+ localStorage.setItem('souk_products',JSON.stringify(products));
 }
+let selectedImg='';
+const ADMIN_PASS = 'ob10m';
+let searchText = '';
 function render(){
  let filtered = products.filter(p => p.name.includes(searchText));
  let cards='';
@@ -69,19 +64,34 @@ function render(){
  window.doSearch = (v)=>{ searchText=v; render(); let inp=document.getElementById('searchInput'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); };
  window.installApp = ()=>{ if(deferredPrompt){ deferredPrompt.prompt(); } else { alert('كليكي على ⋮ الفوق و ختار إنشاء اختصار'); } };
 }
-async function showAdmin(){
- let r = await fetch('/api/products');
- products = await r.json();
- document.getElementById('app').innerHTML=`<div class="box"><h2>➕ زيد منتج</h2><input id="n" placeholder="سميت المنتج"><input id="pr" type="number" placeholder="الثمن"><input id="old" type="number" placeholder="الثمن القديم"><input id="imgurl" placeholder="رابط التصويرة"><input id="file" type="file" accept="image/*"><img id="preview"><button class="btn" onclick="add()">زيد المنتج ✅</button><div id="list"></div><button onclick="logout()" style="background:red;color:#fff;border:none;padding:10px 20px;border-radius:10px;margin-top:10px">خروج 🔒</button><br><a href="/">رجع للموقع</a></div>`;
- document.getElementById('file').addEventListener('change', function(e){ let f=e.target.files[0]; if(!f) return; let r=new FileReader(); r.onload=function(ev){selectedImg=ev.target.result; document.getElementById('preview').src=selectedImg; document.getElementById('preview').style.display='block';}; r.readAsDataURL(f); });
- window.add=async ()=>{ let n=document.getElementById('n').value, pr=document.getElementById('pr').value, old=document.getElementById('old').value, url=document.getElementById('imgurl').value; let img = selectedImg || url; if(!n||!pr||!img){alert('عمر كلشي!');return} await fetch('/api/admin/add', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:n, price:pr, old:old, img:img})}); alert('تزاد! وغادي يبان عند كلشي ✅'); location.reload(); };
- let l=''; products.forEach((p)=>{l+=`<p>${p.name} <button onclick="del(${p.id})">مسح</button></p>`}); document.getElementById('list').innerHTML=l;
- window.del=async (id)=>{ await fetch('/api/admin/delete/'+id, {method:'POST'}); location.reload(); };
+function showAdmin(){
+ document.getElementById('app').innerHTML=`<div class="box"><h2>➕ زيد منتج</h2><input id="n" placeholder="سميت المنتج"><input id="pr" type="number" placeholder="الثمن"><input id="old" type="number" placeholder="الثمن القديم"><input id="file" type="file" accept="image/*"><img id="preview"><button class="btn" onclick="add()">زيد المنتج ✅</button><div id="list"></div><button onclick="logout()" style="background:red;color:#fff;border:none;padding:10px 20px;border-radius:10px;margin-top:10px">خروج 🔒</button><br><a href="/">رجع للموقع</a></div>`;
+ document.getElementById('file').addEventListener('change', function(e){ let f=e.target.files[0]; let r=new FileReader(); r.onload=function(ev){selectedImg=ev.target.result; document.getElementById('preview').src=selectedImg; document.getElementById('preview').style.display='block';}; r.readAsDataURL(f); });
+ window.add=()=>{ let n=document.getElementById('n').value, pr=document.getElementById('pr').value, old=document.getElementById('old').value; if(!n||!pr||!selectedImg){alert('عمر كلشي!');return} products.push({name:n,price:pr,old:old,img:selectedImg}); localStorage.setItem('souk_products',JSON.stringify(products)); alert('تزاد!'); location.reload(); };
+ let l=''; products.forEach((p,i)=>{l+=`<p>${p.name} <button onclick="del(${i})">مسح</button></p>`}); document.getElementById('list').innerHTML=l;
+ window.del=(i)=>{products.splice(i,1); localStorage.setItem('souk_products',JSON.stringify(products)); location.reload()};
 }
-async function logout(){ await fetch('/api/admin/logout', {method:'POST'}); location.href='/'; }
-if(location.pathname.includes(ADMIN_PATH)){
-  fetch('/api/admin/check').then(r=>r.json()).then(d=>{
-    if(d.ok){ showAdmin(); }
-    else {
-      document.getElementById('app').innerHTML=`<div class="box"><div class="lock">🔒</div><h2>دخول المدير فقط</h2><input id="pass" type="password" placeholder="كتب المودباس"><button class="loginBtn" onclick="checkPass()">دخول ✅</button><p id="err" style="color:red"></p><a href="/">رجع للموقع</a></div>`;
-      window.checkPass=async ()=>{ let p=document.getElementById('pass').value; let r=await fetch('/api/admin/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({password:p})}); let j=await r.json
+function logout(){ localStorage.removeItem('souk_admin'); location.reload(); }
+if(location.pathname.includes('admin')){
+ if(localStorage.getItem('souk_admin')==='ok'){ showAdmin(); }
+ else {
+  document.getElementById('app').innerHTML=`<div class="box"><div class="lock">🔒</div><h2>دخول المدير فقط</h2><input id="pass" type="password" placeholder="كتب المودباس"><button class="loginBtn" onclick="checkPass()">دخول ✅</button><p id="err" style="color:red"></p><a href="/">رجع للموقع</a></div>`;
+  window.checkPass=()=>{ let p=document.getElementById('pass').value; if(p===ADMIN_PASS){ localStorage.setItem('souk_admin','ok'); showAdmin(); } else { document.getElementById('err').innerText='❌ المودباس غالط!'; } };
+ }
+} else { render(); }
+</script></body></html>
+"""
+@app.route("/manifest.json")
+def manifest():
+    return jsonify(MANIFEST)
+@app.route("/sw.js")
+def sw():
+    return Response(SW, mimetype="application/javascript")
+@app.route("/")
+@app.route("/admin")
+@app.route("/api/index")
+@app.route("/<path:path>")
+def home(path=None):
+    return render_template_string(HTML)
+if __name__ == "__main__":
+    app.run()
