@@ -1,4 +1,4 @@
-mport os, re, secrets, uuid
+import os, re, secrets, uuid
 from datetime import datetime, timezone
 from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, abort, flash
