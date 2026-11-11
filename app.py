@@ -29,7 +29,10 @@ HTML = """
 """
 
 @app.route("/")
-def home():
+@app.route("/api/index")
+@app.route("/api/index.py")
+@app.route("/<path:path>")
+def home(path=None):
     return render_template_string(HTML, products=products)
 
 if __name__ == "__main__":
