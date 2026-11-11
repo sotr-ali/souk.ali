@@ -1,4 +1,4 @@
-from flask import Flask, render_template_string, jsonify
+from flask import Flask, render_template_string, jsonify, Response
 app = Flask(__name__)
 
 MANIFEST = {
@@ -8,8 +8,17 @@ MANIFEST = {
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#111111",
-  "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "512x512","type": "image/png"}]
+  "icons": [
+    {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "192x192","type": "image/png"},
+    {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "512x512","type": "image/png", "purpose": "any maskable"}
+  ]
 }
+
+SW = """
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { self.clients.claim(); });
+self.addEventListener('fetch', e => { });
+"""
 
 HTML = """
 <!DOCTYPE html>
@@ -32,8 +41,11 @@ input{width:90%;padding:13px;margin:8px;border:1px solid #ddd;border-radius:12px
 <div class="topbar">🔥 <b>تخفيض حتى 50%</b> - التوصيل مجاني فوق 300 درهم</div>
 <div id="app"></div>
 <script>
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js'); }
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt = e; });
+window.addEventListener('appinstalled', ()=>{ deferredPrompt = null; });
+
 let products = JSON.parse(localStorage.getItem('souk_products') || '[]');
 if(products.length==0){
  products=[
@@ -50,9 +62,19 @@ function render(){
  let cards='';
  if(filtered.length==0){ cards = `<p style="grid-column:1/3">😢 ما لقيناش "${searchText}"</p>`; }
  filtered.forEach(p=>{ cards+=`<div class="card"><img src="${p.img}"><h3>${p.name}</h3><p><b style="color:#ff3b30">${p.price} درهم</b> <s>${p.old||''}</s></p><a href="https://wa.me/212770384739?text=بغيت نشري ${encodeURIComponent(p.name)}"><button class="btn">اطلب عبر واتساب ✅</button></a></div>`; });
- document.getElementById('app').innerHTML=`<header><div class="logo">SOUK<span>ALI</span></div><div>🛒</div></header><div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>أكثر من 1000 زبون راضي - الدفع عند الاستلام</p><br><button onclick="document.getElementById('prods').scrollIntoView({behavior:'smooth'})">تسوق الآن 🔥</button><br><button class="appBtn" onclick="installApp()">📲 ثبت التطبيق في هاتفك</button><p style="font-size:12px;margin-top:8px">كليكي على الزر و من بعد دير تثبيت</p></div><div class="searchBox"><input id="searchInput" placeholder="🔍 قلب على أي منتج... سماعة، ساعة..." value="${searchText}" oninput="doSearch(this.value)"></div><h2 id="prods">🔥 العروض الأكثر مبيعا</h2><div class="grid">${cards}</div><p>واتساب: 0770384739</p>`;
+ document.getElementById('app').innerHTML=`<header><div class="logo">SOUK<span>ALI</span></div><div>🛒</div></header><div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>أكثر من 1000 زبون راضي - الدفع عند الاستلام</p><br><button onclick="document.getElementById('prods').scrollIntoView({behavior:'smooth'})">تسوق الآن 🔥</button><br><button id="installBtn" class="appBtn" onclick="installApp()">📲 ثبت التطبيق في هاتفك</button></div><div class="searchBox"><input id="searchInput" placeholder="🔍 قلب على أي منتج... سماعة، ساعة..." value="${searchText}" oninput="doSearch(this.value)"></div><h2 id="prods">🔥 العروض الأكثر مبيعا</h2><div class="grid">${cards}</div><p>واتساب: 0770384739</p>`;
  window.doSearch = (v)=>{ searchText=v; render(); let inp=document.getElementById('searchInput'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); };
- window.installApp = ()=>{ if(deferredPrompt){ deferredPrompt.prompt(); } else { alert('دير هاد الخطوات: \\n1. كليكي على 3 نقاط ⋮ الفوق\\n2. ختار Add to Home Screen\\n3. دير Add'); } };
+}
+async function installApp(){
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    const choice = await deferredPrompt.userChoice;
+    if(choice.outcome === 'accepted'){ console.log('تم التثبيت'); }
+    deferredPrompt = null;
+  } else {
+    // إلا كان التطبيق أصلا مثبّت ولا المتصفح ما عطاش الإذن، نعاود نطلب من Chrome يبين النافذة
+    alert('ساين 2 ثواني و عاود كليكي - Chrome كيوجد التثبيت');
+  }
 }
 function showAdmin(){
  document.getElementById('app').innerHTML=`<div class="box"><h2>➕ زيد منتج</h2><input id="n" placeholder="سميت المنتج"><input id="pr" type="number" placeholder="الثمن"><input id="old" type="number" placeholder="الثمن القديم"><input id="file" type="file" accept="image/*"><img id="preview"><button class="btn" onclick="add()">زيد المنتج ✅</button><div id="list"></div><button onclick="logout()" style="background:red;color:#fff;border:none;padding:10px 20px;border-radius:10px;margin-top:10px">خروج 🔒</button><br><a href="/">رجع للموقع</a></div>`;
@@ -74,6 +96,9 @@ if(location.pathname.includes('admin')){
 @app.route("/manifest.json")
 def manifest():
     return jsonify(MANIFEST)
+@app.route("/sw.js")
+def sw():
+    return Response(SW, mimetype="application/javascript")
 @app.route("/")
 @app.route("/admin")
 @app.route("/api/index")
