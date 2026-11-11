@@ -1,124 +1,97 @@
-import os, secrets
-from flask import Flask, request, session, redirect, url_for, render_template_string
-
+from flask import Flask, render_template_string, jsonify, Response
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "souk-test-123")
 
-# داتا مؤقتة للتجريب فقط - كتمسح إلا طفيتي السيرفر
-PRODUCTS = [
-    {"id": 1, "name": "سماعة بلوتوث Pro Max", "price": 199, "old": 349, "img": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600"},
-    {"id": 2, "name": "ساعة ذكية Ultra", "price": 299, "old": 499, "img": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"},
-]
-ORDERS = []
-ADMIN_PASS = os.environ.get("ADMIN_PASSWORD", "1234")  # للتجريب فقط
+MANIFEST = {
+  "name": "SOUK ALI",
+  "short_name": "SOUK ALI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "192x192","type": "image/png"},
+    {"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "512x512","type": "image/png"}
+  ]
+}
 
-BASE = """
-<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>SOUK ALI</title>
-<style>
-body{font-family:Arial;margin:0;background:#f8f9fa;text-align:center}
-header{background:#111;color:#fff;padding:15px;display:flex;justify-content:space-between}
-.logo{font-weight:900;font-size:22px}.logo span{color:#ff3b30}
-.hero{background:linear-gradient(135deg,#111,#ff3b30);color:#fff;padding:30px 15px}
-.hero button{background:#ffc107;border:none;padding:13px 30px;border-radius:30px;font-weight:900}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px}
-.card{background:#fff;border-radius:18px;overflow:hidden;padding-bottom:12px}
-.card img{width:100%;height:170px;object-fit:cover}
-.btn{background:#25D366;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:900;width:90%;margin:10px 0}
-input{width:90%;padding:13px;margin:8px;border:1px solid #ddd;border-radius:12px}
-.box{background:#fff;max-width:420px;margin:20px auto;padding:20px;border-radius:18px}
-</style></head><body>
-<header><div class="logo">SOUK<span>ALI</span></div><div><a href="/cart" style="color:#fff;text-decoration:none">🛒 {{cart}} | <a href="/admin" style="color:#ffc107">أدمن</a></div></header>
-{{content}}
-</body></html>
+SW = """
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { self.clients.claim(); });
+self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(()=> caches.match(e.request))); });
 """
 
-def render(content, cart=0):
-    return render_template_string(BASE.replace("{{content}}", content), cart=cart)
-
-def cart_count():
-    return sum(session.get("cart", {}).values())
-
+HTML = """
+<!DOCTYPE html>
+<html dir="rtl" lang="ar"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SOUK ALI</title>
+<link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#111111">
+<style>
+body{font-family:Arial;margin:0;background:#f8f9fa;text-align:center}
+.topbar{background:#111;color:#fff;padding:8px;font-size:13px} .topbar b{color:#ffc107}
+header{position:sticky;top:0;background:#fff;display:flex;justify-content:space-between;align-items:center;padding:12px 15px;box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.logo{font-size:24px;font-weight:900} .logo span{color:#ff3b30}
+.hero{background:linear-gradient(135deg,#111,#ff3b30);color:#fff;padding:30px 15px;border-radius:0 0 25px 25px}
+.hero h1{margin:0;font-size:28px} .hero button{background:#ffc107;border:none;padding:13px 30px;border-radius:30px;font-weight:900;font-size:16px;margin-top:10px}
+.appBtn{background:#fff!important;color:#111!important;border:none;padding:12px 22px;border-radius:30px;font-weight:900;margin-top:12px;font-size:15px}
+.searchBox{background:#fff;padding:12px;position:sticky;top:58px;z-index:99;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.searchBox input{width:90%;padding:13px;border:2px solid #eee;border-radius:30px;font-size:15px;text-align:center;outline:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px} .card{background:#fff;border-radius:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 4px 15px rgba(0,0,0,.06)} .card img{width:100%;height:180px;object-fit:cover} .btn{width:calc(100% - 20px);margin:10px;background:#25D366;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:900}
+input{width:90%;padding:13px;margin:8px;border:1px solid #ddd;border-radius:12px} .box{background:#fff;max-width:420px;margin:20px auto;padding:20px;border-radius:18px} #preview{width:100%;border-radius:12px;display:none}
+.lock{font-size:50px} .loginBtn{background:#111;color:#fff;border:none;padding:13px 30px;border-radius:12px;font-weight:900;width:90%;font-size:16px}
+</style></head><body>
+<div class="topbar">🔥 <b>تخفيض حتى 50%</b> - التوصيل مجاني فوق 300 درهم</div>
+<div id="app"></div>
+<script>
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('/sw.js'); }
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
+let products = JSON.parse(localStorage.getItem('souk_products') || '[]');
+if(products.length==0){
+ products=[
+  {name:'سماعة بلوتوث Pro Max',price:199,old:349,img:'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'},
+  {name:'ساعة ذكية Ultra',price:299,old:499,img:'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'}
+ ];
+ localStorage.setItem('souk_products',JSON.stringify(products));
+}
+let selectedImg='';
+const ADMIN_PASS = 'ob10m';
+let searchText = '';
+function render(){
+ let filtered = products.filter(p => p.name.includes(searchText));
+ let cards='';
+ if(filtered.length==0){ cards = `<p style="grid-column:1/3">😢 ما لقيناش "${searchText}"</p>`; }
+ filtered.forEach(p=>{ cards+=`<div class="card"><img src="${p.img}"><h3>${p.name}</h3><p><b style="color:#ff3b30">${p.price} درهم</b> <s>${p.old||''}</s></p><a href="https://wa.me/212770384739?text=بغيت نشري ${encodeURIComponent(p.name)}"><button class="btn">اطلب عبر واتساب ✅</button></a></div>`; });
+ document.getElementById('app').innerHTML=`<header><div class="logo">SOUK<span>ALI</span></div><div>🛒</div></header><div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>أكثر من 1000 زبون راضي - الدفع عند الاستلام</p><br><button onclick="document.getElementById('prods').scrollIntoView({behavior:'smooth'})">تسوق الآن 🔥</button><br><button class="appBtn" onclick="installApp()">📲 ثبت التطبيق في هاتفك</button></div><div class="searchBox"><input id="searchInput" placeholder="🔍 قلب على أي منتج... سماعة، ساعة..." value="${searchText}" oninput="doSearch(this.value)"></div><h2 id="prods">🔥 العروض الأكثر مبيعا</h2><div class="grid">${cards}</div><p>واتساب: 0770384739</p>`;
+ window.doSearch = (v)=>{ searchText=v; render(); let inp=document.getElementById('searchInput'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); };
+ window.installApp = ()=>{ if(deferredPrompt){ deferredPrompt.prompt(); } else { alert('كليكي على ⋮ الفوق و ختار إنشاء اختصار'); } };
+}
+function showAdmin(){
+ document.getElementById('app').innerHTML=`<div class="box"><h2>➕ زيد منتج</h2><input id="n" placeholder="سميت المنتج"><input id="pr" type="number" placeholder="الثمن"><input id="old" type="number" placeholder="الثمن القديم"><input id="file" type="file" accept="image/*"><img id="preview"><button class="btn" onclick="add()">زيد المنتج ✅</button><div id="list"></div><button onclick="logout()" style="background:red;color:#fff;border:none;padding:10px 20px;border-radius:10px;margin-top:10px">خروج 🔒</button><br><a href="/">رجع للموقع</a></div>`;
+ document.getElementById('file').addEventListener('change', function(e){ let f=e.target.files[0]; let r=new FileReader(); r.onload=function(ev){selectedImg=ev.target.result; document.getElementById('preview').src=selectedImg; document.getElementById('preview').style.display='block';}; r.readAsDataURL(f); });
+ window.add=()=>{ let n=document.getElementById('n').value, pr=document.getElementById('pr').value, old=document.getElementById('old').value; if(!n||!pr||!selectedImg){alert('عمر كلشي!');return} products.push({name:n,price:pr,old:old,img:selectedImg}); localStorage.setItem('souk_products',JSON.stringify(products)); alert('تزاد!'); location.reload(); };
+ let l=''; products.forEach((p,i)=>{l+=`<p>${p.name} <button onclick="del(${i})">مسح</button></p>`}); document.getElementById('list').innerHTML=l;
+ window.del=(i)=>{products.splice(i,1); localStorage.setItem('souk_products',JSON.stringify(products)); location.reload()};
+}
+function logout(){ localStorage.removeItem('souk_admin'); location.reload(); }
+if(location.pathname.includes('admin')){
+ if(localStorage.getItem('souk_admin')==='ok'){ showAdmin(); }
+ else {
+  document.getElementById('app').innerHTML=`<div class="box"><div class="lock">🔒</div><h2>دخول المدير فقط</h2><input id="pass" type="password" placeholder="كتب المودباس"><button class="loginBtn" onclick="checkPass()">دخول ✅</button><p id="err" style="color:red"></p><a href="/">رجع للموقع</a></div>`;
+  window.checkPass=()=>{ let p=document.getElementById('pass').value; if(p===ADMIN_PASS){ localStorage.setItem('souk_admin','ok'); showAdmin(); } else { document.getElementById('err').innerText='❌ المودباس غالط!'; } };
+ }
+} else { render(); }
+</script></body></html>
+"""
+@app.route("/manifest.json")
+def manifest():
+    return jsonify(MANIFEST)
+@app.route("/sw.js")
+def sw():
+    return Response(SW, mimetype="application/javascript")
 @app.route("/")
-def index():
-    q = request.args.get("q", "")
-    prods = [p for p in PRODUCTS if q in p["name"]] if q else PRODUCTS
-    cards = ""
-    for p in prods:
-        cards += f"""<div class="card"><img src="{p['img']}"><h3>{p['name']}</h3>
-        <p><b style="color:#ff3b30">{p['price']} درهم</b> <s>{p['old']}</s></p>
-        <form method="post" action="/add/{p['id']}"><button class="btn">زيد للسلة 🛒</button></form></div>"""
-    if not cards: cards = "<p>ما لقيناش هاد المنتج 😢</p>"
-    html = f"""
-    <div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>الدفع عند الاستلام</p></div>
-    <form><input name="q" value="{q}" placeholder="🔍 قلب على منتج..."><button>قلب</button></form>
-    <h2>🔥 العروض</h2><div class="grid">{cards}</div>
-    """
-    return render(html, cart_count())
-
-@app.post("/add/<int:pid>")
-def add(pid):
-    cart = session.get("cart", {})
-    cart[str(pid)] = cart.get(str(pid), 0) + 1
-    session["cart"] = cart
-    return redirect(url_for("cart_page"))
-
-@app.route("/cart")
-def cart_page():
-    cart = session.get("cart", {})
-    items = ""
-    total = 0
-    for pid, qty in cart.items():
-        p = next((x for x in PRODUCTS if x["id"] == int(pid)), None)
-        if p:
-            total += p["price"] * qty
-            items += f"<p>{p['name']} × {qty} = {p['price']*qty} درهم</p>"
-    if not items: items = "<p>السلة خاوية</p>"
-    html = f"""
-    <div class="box"><h2>🛒 السلة ديالك</h2>{items}<h3>المجموع: {total} درهم</h3>
-    <form method="post" action="/checkout">
-    <input name="name" placeholder="الاسم الكامل" required>
-    <input name="phone" placeholder="النمرة 06..." required>
-    <input name="city" placeholder="المدينة" required>
-    <input name="address" placeholder="العنوان" required>
-    <button class="btn">أكد الطلب ✅</button></form></div>
-    """
-    return render(html, cart_count())
-
-@app.post("/checkout")
-def checkout():
-    cart = session.get("cart", {})
-    total = sum(next((p["price"] for p in PRODUCTS if p["id"]==int(pid)),0)*qty for pid,qty in cart.items())
-    ORDERS.append({"name": request.form.get("name"), "phone": request.form.get("phone"), "city": request.form.get("city"), "total": total})
-    session.pop("cart", None)
-    return render(f"<div class='box'><h1>✅ شكرا!</h1><p>وصلنا الطلب ديالك ديال {total} درهم</p><p>غادي نعيطو ليك باش نأكدو</p><a href='/'>رجع للمتجر</a></div>")
-
-@app.route("/admin", methods=["GET","POST"])
-def admin():
-    if request.method == "POST":
-        if request.form.get("password") == ADMIN_PASS:
-            session["admin"] = True
-        return redirect("/admin")
-    if not session.get("admin"):
-        return render("""<div class="box"><h2>🔒 دخول المدير</h2>
-        <form method="post"><input name="password" type="password" placeholder="المودباس: 1234">
-        <button class="btn" style="background:#111">دخول</button></form></div>""")
-    orders_html = "".join([f"<p>👤 {o['name']} - {o['phone']} - {o['city']} - <b>{o['total']} درهم</b></p>" for o in ORDERS]) or "<p>باقي ما كاين حتى طلب</p>"
-    prods_html = "".join([f"<p>{p['name']} - {p['price']} درهم</p>" for p in PRODUCTS])
-    return render(f"""<div class="box"><h2>لوحة الأدمن</h2><h3>الطلبات:</h3>{orders_html}<h3>المنتجات:</h3>{prods_html}
-    <form method="post" action="/admin/add"><input name="name" placeholder="سمية المنتج" required>
-    <input name="price" type="number" placeholder="الثمن" required>
-    <input name="img" placeholder="رابط التصويرة" required>
-    <button class="btn">زيد منتج ✅</button></form>
-    <a href="/">رجع للموقع</a></div>""")
-
-@app.post("/admin/add")
-def admin_add():
-    if not session.get("admin"): return redirect("/admin")
-    PRODUCTS.append({"id": max([p["id"] for p in PRODUCTS])+1 if PRODUCTS else 1,
-                     "name": request.form.get("name"), "price": int(request.form.get("price") or 0), "old": 0,
-                     "img": request.form.get("img")})
-    return redirect("/admin")
-
+@app.route("/admin")
+@app.route("/api/index")
+@app.route("/<path:path>")
+def home(path=None):
+    return render_template_string(HTML)
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run()
