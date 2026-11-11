@@ -1,5 +1,15 @@
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, jsonify
 app = Flask(__name__)
+
+MANIFEST = {
+  "name": "SOUK ALI",
+  "short_name": "SOUK ALI",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png","sizes": "512x512","type": "image/png"}]
+}
 
 HTML = """
 <!DOCTYPE html>
@@ -12,7 +22,7 @@ header{position:sticky;top:0;background:#fff;display:flex;justify-content:space-
 .logo{font-size:24px;font-weight:900} .logo span{color:#ff3b30}
 .hero{background:linear-gradient(135deg,#111,#ff3b30);color:#fff;padding:30px 15px;border-radius:0 0 25px 25px}
 .hero h1{margin:0;font-size:28px} .hero button{background:#ffc107;border:none;padding:13px 30px;border-radius:30px;font-weight:900;font-size:16px;margin-top:10px}
-.appBtn{background:#fff;color:#111;border:none;padding:10px 20px;border-radius:30px;font-weight:900;margin-top:12px}
+.appBtn{background:#fff!important;color:#111!important;border:none;padding:12px 22px;border-radius:30px;font-weight:900;margin-top:12px;font-size:15px}
 .searchBox{background:#fff;padding:12px;position:sticky;top:58px;z-index:99;box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .searchBox input{width:90%;padding:13px;border:2px solid #eee;border-radius:30px;font-size:15px;text-align:center;outline:none}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px} .card{background:#fff;border-radius:18px;overflow:hidden;padding-bottom:12px;box-shadow:0 4px 15px rgba(0,0,0,.06)} .card img{width:100%;height:180px;object-fit:cover} .btn{width:calc(100% - 20px);margin:10px;background:#25D366;color:#fff;border:none;padding:12px;border-radius:12px;font-weight:900}
@@ -23,7 +33,7 @@ input{width:90%;padding:13px;margin:8px;border:1px solid #ddd;border-radius:12px
 <div id="app"></div>
 <script>
 let deferredPrompt;
-window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; let b=document.getElementById('installBtn'); if(b) b.style.display='inline-block'; });
+window.addEventListener('beforeinstallprompt', (e)=>{ e.preventDefault(); deferredPrompt=e; });
 let products = JSON.parse(localStorage.getItem('souk_products') || '[]');
 if(products.length==0){
  products=[
@@ -40,10 +50,9 @@ function render(){
  let cards='';
  if(filtered.length==0){ cards = `<p style="grid-column:1/3">😢 ما لقيناش "${searchText}"</p>`; }
  filtered.forEach(p=>{ cards+=`<div class="card"><img src="${p.img}"><h3>${p.name}</h3><p><b style="color:#ff3b30">${p.price} درهم</b> <s>${p.old||''}</s></p><a href="https://wa.me/212770384739?text=بغيت نشري ${encodeURIComponent(p.name)}"><button class="btn">اطلب عبر واتساب ✅</button></a></div>`; });
- document.getElementById('app').innerHTML=`<header><div class="logo">SOUK<span>ALI</span></div><div>🛒</div></header><div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>أكثر من 1000 زبون راضي - الدفع عند الاستلام</p><br><button onclick="document.getElementById('prods').scrollIntoView({behavior:'smooth'})">تسوق الآن 🔥</button><br><button id="installBtn" class="appBtn" style="display:none" onclick="installApp()">📲 ثبت التطبيق في هاتفك</button><p style="font-size:12px;margin-top:8px">إلا ما بانش الزر، كليكي على ⋮ فالمتصفح و دير "Add to Home Screen"</p></div><div class="searchBox"><input id="searchInput" placeholder="🔍 قلب على أي منتج... سماعة، ساعة..." value="${searchText}" oninput="doSearch(this.value)"></div><h2 id="prods">🔥 العروض الأكثر مبيعا</h2><div class="grid">${cards}</div><p>واتساب: 0770384739</p>`;
- if(deferredPrompt){ document.getElementById('installBtn').style.display='inline-block'; }
+ document.getElementById('app').innerHTML=`<header><div class="logo">SOUK<span>ALI</span></div><div>🛒</div></header><div class="hero"><h1>سوق علي - تسوق بثقة 🚀</h1><p>أكثر من 1000 زبون راضي - الدفع عند الاستلام</p><br><button onclick="document.getElementById('prods').scrollIntoView({behavior:'smooth'})">تسوق الآن 🔥</button><br><button class="appBtn" onclick="installApp()">📲 ثبت التطبيق في هاتفك</button><p style="font-size:12px;margin-top:8px">كليكي على الزر و من بعد دير تثبيت</p></div><div class="searchBox"><input id="searchInput" placeholder="🔍 قلب على أي منتج... سماعة، ساعة..." value="${searchText}" oninput="doSearch(this.value)"></div><h2 id="prods">🔥 العروض الأكثر مبيعا</h2><div class="grid">${cards}</div><p>واتساب: 0770384739</p>`;
  window.doSearch = (v)=>{ searchText=v; render(); let inp=document.getElementById('searchInput'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); };
- window.installApp = ()=>{ if(deferredPrompt){ deferredPrompt.prompt(); } else { alert('كليكي على ⋮ فوق فالمتصفح و ختار Add to Home Screen / تثبيت التطبيق'); } };
+ window.installApp = ()=>{ if(deferredPrompt){ deferredPrompt.prompt(); } else { alert('دير هاد الخطوات: \\n1. كليكي على 3 نقاط ⋮ الفوق\\n2. ختار Add to Home Screen\\n3. دير Add'); } };
 }
 function showAdmin(){
  document.getElementById('app').innerHTML=`<div class="box"><h2>➕ زيد منتج</h2><input id="n" placeholder="سميت المنتج"><input id="pr" type="number" placeholder="الثمن"><input id="old" type="number" placeholder="الثمن القديم"><input id="file" type="file" accept="image/*"><img id="preview"><button class="btn" onclick="add()">زيد المنتج ✅</button><div id="list"></div><button onclick="logout()" style="background:red;color:#fff;border:none;padding:10px 20px;border-radius:10px;margin-top:10px">خروج 🔒</button><br><a href="/">رجع للموقع</a></div>`;
@@ -62,6 +71,9 @@ if(location.pathname.includes('admin')){
 } else { render(); }
 </script></body></html>
 """
+@app.route("/manifest.json")
+def manifest():
+    return jsonify(MANIFEST)
 @app.route("/")
 @app.route("/admin")
 @app.route("/api/index")
